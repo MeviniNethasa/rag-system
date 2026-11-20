@@ -1,0 +1,12 @@
+[project]
+name = "parts-rag"
+version = "0.1.0"
+description = "Spare parts RAG lookup for Bajaj Pulsar N-125 (00JZF7ZZ)"
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
