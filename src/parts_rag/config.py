@@ -25,5 +25,15 @@ def require_env(name: str) -> str:
     return value
 
 
+def supabase_url() -> str:
+    """Base project URL. Accepts a pasted REST URL like
+    https://<ref>.supabase.co/rest/v1/ and trims it to https://<ref>.supabase.co"""
+    url = require_env("SUPABASE_URL").strip().rstrip("/")
+    for suffix in ("/rest/v1",):
+        if url.endswith(suffix):
+            url = url[: -len(suffix)]
+    return url
+
+
 def claude_model() -> str:
     return os.getenv("CLAUDE_MODEL") or DEFAULT_CLAUDE_MODEL
