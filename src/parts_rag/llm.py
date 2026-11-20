@@ -65,23 +65,46 @@ def build_context(result: Result) -> str:
 
 
 def check_casing(text: str, result: Result) -> list[str]:
-    """Return codes in `text` that don't exactly match a code in the retrieved
-    chunks. Catches casing drift such as 'DH201079' for stored 'Dh201079'."""
+    """Return codes in `text` that are a different-case copy of a retrieved
+    code (e.g. 'DH201079' for stored 'Dh201079') or that appear nowhere in
+    the retrieved chunks or the user's question.
+
+    A code the user typed that matches nothing at all (e.g. 'XX999999' in a
+    "not found" reply) is allowed: echoing it is not a casing error."""
     allowed: set[str] = set()
     for h in result.hits:
         allowed.update(find_part_codes(h.content))
         if "part_no" in h.metadata:
             allowed.add(h.metadata["part_no"])
+    allowed_lower = {c.lower() for c in allowed}
+    for c in find_part_codes(result.query):
+        if c.lower() not in allowed_lower:
+            allowed.add(c)
     return [c for c in dict.fromkeys(find_part_codes(text)) if c not in allowed]
+
+
+def _question_for_llm(result: Result) -> tuple[str, list[str]]:
+    """On a case-insensitive fallback, replace the user's typed code with the
+    stored Part No. so Claude never sees (or repeats) the wrong casing."""
+    question, notes = result.query, list(result.notes)
+    if result.lookup_mode == "ci_fallback" and result.rows:
+        stored = result.rows[0].metadata["part_no"]
+        question = question.replace(result.route.value, stored)
+        notes = [
+            f"The user's search matched Part No. {stored} case-insensitively. "
+            f"Write it only as {stored}."
+        ]
+    return question, notes
 
 
 def answer(result: Result) -> Answer:
     model = claude_model()
-    notes = "\n".join(f"Note: {n}" for n in result.notes)
+    question, notes = _question_for_llm(result)
+    note_text = "\n".join(f"Note: {n}" for n in notes)
     user_content = (
         f"<catalogue_rows>\n{build_context(result)}\n</catalogue_rows>\n"
-        + (f"{notes}\n" if notes else "")
-        + f"\nQuestion: {result.query}"
+        + (f"{note_text}\n" if note_text else "")
+        + f"\nQuestion: {question}"
     )
     response = _client().messages.create(
         model=model,
