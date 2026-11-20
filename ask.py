@@ -51,41 +51,50 @@ def print_debug(result: Result) -> None:
         print(f"    {h.id:<12} source={h.source:<15} sim={sim} kw_terms={kw}")
 
 
+def get_answer(result: Result):
+    """Call Claude; on API errors print a one-line reason and return None."""
+    import anthropic
+    from parts_rag.llm import answer
+
+    try:
+        return answer(result)
+    except anthropic.AuthenticationError:
+        print("Claude: invalid ANTHROPIC_API_KEY. Showing retrieved rows only.")
+    except anthropic.NotFoundError:
+        print("Claude: model not found. Check CLAUDE_MODEL in .env. Showing rows only.")
+    except anthropic.RateLimitError:
+        print("Claude: rate limited. Showing retrieved rows only.")
+    except anthropic.APIStatusError as e:
+        print(f"Claude API error ({e.status_code}). Showing retrieved rows only.")
+    except anthropic.APIConnectionError:
+        print("Claude: network error. Showing retrieved rows only.")
+    return None
+
+
 def handle(query: str, debug: bool, use_llm: bool) -> None:
     result = retrieve(query)
-    if use_llm:
-        import anthropic
-        from parts_rag.llm import answer
+    ans = get_answer(result) if use_llm else None
 
-        try:
-            ans = answer(result)
-        except anthropic.AuthenticationError:
-            print("Claude: invalid ANTHROPIC_API_KEY. Showing retrieved rows only.")
-            ans = None
-        except anthropic.NotFoundError:
-            print("Claude: model not found. Check CLAUDE_MODEL in .env. Showing rows only.")
-            ans = None
-        except anthropic.RateLimitError:
-            print("Claude: rate limited. Showing retrieved rows only.")
-            ans = None
-        except anthropic.APIStatusError as e:
-            print(f"Claude API error ({e.status_code}). Showing retrieved rows only.")
-            ans = None
-        except anthropic.APIConnectionError:
-            print("Claude: network error. Showing retrieved rows only.")
-            ans = None
-        if ans:
-            print(f"\n{ans.text}\n")
-            if not ans.casing_ok:
-                print(f"  WARNING: answer contains part codes not in the catalogue "
-                      f"rows (check casing): {ans.unknown_codes}")
-    else:
-        for n in result.notes:
-            print(f"  {n}")
-    print_rows(result)
+    if ans:
+        print(ans.text)
+        if not ans.casing_ok:
+            print(f"  WARNING: answer contains part codes not in the catalogue "
+                  f"rows (check casing): {ans.unknown_codes}")
+
+    # Normal mode: the answer alone, plus a compact table when 2+ rows match.
+    # Without an answer (--no-llm or an API error), the rows are the answer.
+    if debug or not ans or len(result.rows) >= 2:
+        if not ans:
+            for n in result.notes:
+                print(n)
+        if result.rows or debug:
+            if ans:
+                print()
+            print_rows(result)
+
     if debug:
         print_debug(result)
-        if use_llm and ans:
+        if ans:
             print(f"  model        : {ans.model} (stop_reason={ans.stop_reason})")
             print(f"  casing check : {'OK' if ans.casing_ok else 'FAILED ' + str(ans.unknown_codes)}")
 

@@ -2,10 +2,10 @@
 
 1. Part code  -> case-sensitive exact match; only if 0 rows, ILIKE fallback.
 2. Sr. No.    -> direct sr_no match.
-3. Otherwise  -> case-insensitive keyword match on descriptions (catches every
-                 matching row) + pgvector cosine search, merged. Keyword hits
-                 rank above vector-only hits. The summary chunk is only kept
-                 for whole-assembly questions.
+3. Otherwise  -> case-insensitive keyword match on descriptions. If it finds
+                 any rows, those are the result. Only when it finds none
+                 (natural-language questions) does pgvector cosine search run.
+The summary chunk is added only for whole-assembly questions.
 
 Results always carry the stored metadata, so part numbers come back in their
 true casing (e.g. "DH201079" -> "Dh201079").
@@ -22,7 +22,6 @@ from .query_router import Route, route
 
 VECTOR_TOP_K = 5
 VECTOR_MIN_SIMILARITY = 0.60   # bge-small cosine; tuned on this table
-VECTOR_ONLY_KEEP = 3           # vector-only rows kept when there are keyword hits
 
 
 @dataclass
@@ -30,7 +29,7 @@ class Hit:
     id: str
     content: str
     metadata: dict[str, Any]
-    source: str                  # exact | ci_fallback | sr_no | keyword | vector | keyword+vector
+    source: str                  # exact | ci_fallback | sr_no | keyword | vector
     similarity: float | None = None
     matched_terms: int | None = None
 
@@ -44,7 +43,7 @@ class Result:
     query: str
     route: Route
     hits: list[Hit] = field(default_factory=list)
-    lookup_mode: str = ""        # exact | ci_fallback | none | sr_no | hybrid
+    lookup_mode: str = ""        # exact | ci_fallback | none | sr_no | keyword | vector
     notes: list[str] = field(default_factory=list)
 
     @property
@@ -97,31 +96,21 @@ def retrieve(query: str) -> Result:
             res.notes.append(f"No item with Sr. No. {r.value} in this assembly.")
 
     else:
-        res.lookup_mode = "hybrid"
         keyword = _hits(db.match_description(r.terms), "keyword") if r.terms else []
-        vector = _hits(
-            db.match_vectors(embed_query(query), VECTOR_TOP_K, VECTOR_MIN_SIMILARITY),
-            "vector",
-        )
-        by_id: dict[str, Hit] = {h.id: h for h in keyword}
-        vector_only: list[Hit] = []
-        for v in vector:
-            if v.id in by_id:
-                by_id[v.id].source = "keyword+vector"
-                by_id[v.id].similarity = v.similarity
-            elif v.is_row:
-                vector_only.append(v)
-        merged = sorted(
-            by_id.values(),
-            key=lambda h: (-(h.matched_terms or 0), -(h.similarity or 0.0), h.id),
-        )
-        if merged:
-            merged += vector_only[:VECTOR_ONLY_KEEP]
+        if keyword:
+            # Keyword hits are precise; vector search would only add rows that
+            # share the assembly header text, so skip it.
+            res.lookup_mode = "keyword"
+            res.hits = sorted(keyword, key=lambda h: (-(h.matched_terms or 0), h.id))
         else:
-            merged = vector_only
-        res.hits = merged
-        if not res.hits:
-            res.notes.append("No matching rows by keyword or meaning.")
+            res.lookup_mode = "vector"
+            vector = _hits(
+                db.match_vectors(embed_query(query), VECTOR_TOP_K, VECTOR_MIN_SIMILARITY),
+                "vector",
+            )
+            res.hits = [v for v in vector if v.is_row]
+            if not res.hits:
+                res.notes.append("No matching rows by keyword or meaning.")
 
     if r.whole_assembly and not any(h.id.endswith("-summary") for h in res.hits):
         res.hits = _summary_hit() + res.hits

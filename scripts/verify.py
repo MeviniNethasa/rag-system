@@ -37,10 +37,6 @@ def row_parts(res) -> list[str]:
     return [h.metadata["part_no"] for h in res.rows]
 
 
-def keyword_parts(res) -> set[str]:
-    return {h.metadata["part_no"] for h in res.rows if h.source.startswith("keyword")}
-
-
 def run_retrieval_checks() -> None:
     print("\nDatabase")
     n = db.count_chunks()
@@ -78,21 +74,25 @@ def run_retrieval_checks() -> None:
     print("\nCase-insensitive description + semantic search")
     for q in ("spacer", "sPacer", "SPACER"):
         r = retrieve(q)
-        check(f"'{q}' -> keyword rows 8 + 13 (DE151006, DS151058) ranked first",
-              keyword_parts(r) == {"DE151006", "DS151058"}
-              and set(row_parts(r)[:2]) == {"DE151006", "DS151058"},
-              f"keyword={sorted(keyword_parts(r))} rows={row_parts(r)}")
+        check(f"'{q}' -> only rows 8 + 13 (DE151006, DS151058), no vector noise",
+              r.lookup_mode == "keyword" and set(row_parts(r)) == {"DE151006", "DS151058"}
+              and len(row_parts(r)) == 2,
+              f"{r.lookup_mode} rows={row_parts(r)}")
     r = retrieve("seal")
-    check("'seal' -> keyword rows 5 + 10 (DE151008, 30151033)",
-          keyword_parts(r) == {"DE151008", "30151033"}
-          and set(row_parts(r)[:2]) == {"DE151008", "30151033"},
-          f"keyword={sorted(keyword_parts(r))} rows={row_parts(r)}")
+    check("'seal' -> only rows 5 + 10 (DE151008, 30151033)",
+          r.lookup_mode == "keyword" and set(row_parts(r)) == {"DE151008", "30151033"}
+          and len(row_parts(r)) == 2,
+          f"{r.lookup_mode} rows={row_parts(r)}")
+    r = retrieve("disc")
+    check("'disc' -> only JZ131949", r.lookup_mode == "keyword" and row_parts(r) == ["JZ131949"],
+          f"{r.lookup_mode} rows={row_parts(r)}")
     r = retrieve("disc brake size")
     check("'disc brake size' -> JZ131949 first",
           row_parts(r)[:1] == ["JZ131949"], f"{row_parts(r)}")
     r = retrieve("what holds the front wheel on")
-    check("'what holds the front wheel on' -> DJ151041 AXLE in top 3",
-          "DJ151041" in row_parts(r)[:3], f"{row_parts(r)}")
+    check("'what holds the front wheel on' -> vector search, DJ151041 AXLE in top 3",
+          r.lookup_mode == "vector" and "DJ151041" in row_parts(r)[:3],
+          f"{r.lookup_mode} rows={row_parts(r)}")
     r = retrieve("speed sensor")
     check("'speed sensor' -> Dh201079 first", row_parts(r)[:1] == ["Dh201079"], f"{row_parts(r)}")
     r = retrieve("list all parts in the front wheel assembly")
@@ -123,10 +123,12 @@ def run_llm_checks() -> None:
     for q, must_have in cases:
         res = retrieve(q)
         ans = answer(res)
-        missing = [p for p in must_have if p not in ans.text]
-        check(f"'{q}' -> answer has {must_have or 'no part numbers'} verbatim, casing OK",
-              ans.casing_ok and not missing,
-              f"missing={missing} unknown={ans.unknown_codes}\n        answer: {ans.text[:300]!r}")
+        counts = {p: ans.text.count(p) for p in must_have}
+        not_once = {p: n for p, n in counts.items() if n != 1}
+        filler = ans.text.lower().startswith(("based on", "your search", "i found", "according to"))
+        check(f"'{q}' -> {must_have or 'not found'}: each part once, verbatim, no preamble, casing OK",
+              ans.casing_ok and not not_once and not filler,
+              f"counts={not_once} filler={filler} unknown={ans.unknown_codes}\n        answer: {ans.text[:300]!r}")
     res = retrieve("DH201079")
     ans = answer(res)
     check("answer to 'DH201079' never writes 'DH201079'", "DH201079" not in ans.text, repr(ans.text[:300]))
