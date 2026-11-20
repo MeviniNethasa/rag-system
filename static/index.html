@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parts Lookup · Pulsar N-125</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --text: #1d2330;
+    --muted: #667085;
+    --border: #e4e7ec;
+    --accent: #2563eb;
+    --accent-soft: #eff4ff;
+    --hit: #ef4444;
+    --hit-soft: #fef2f2;
+    --chip: #f2f4f7;
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1218;
+      --panel: #171b23;
+      --text: #e6e9ef;
+      --muted: #98a2b3;
+      --border: #2a303c;
+      --accent: #6b9bff;
+      --accent-soft: #1b2440;
+      --hit-soft: #3a1717;
+      --chip: #222834;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 20px 24px 8px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  header h1 { margin: 0; font-size: 20px; font-weight: 650; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(340px, 5fr) 6fr;
+    gap: 20px;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 12px 24px 32px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; padding: 12px 16px 24px; }
+    header { padding: 16px 16px 4px; }
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+  }
+  .diagram-panel { position: sticky; top: 16px; }
+  @media (max-width: 900px) { .diagram-panel { position: static; } }
+
+  form { display: flex; gap: 8px; }
+  input[type=search] {
+    flex: 1;
+    min-width: 0;
+    padding: 11px 14px;
+    font: inherit;
+    color: var(--text);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    outline: none;
+  }
+  input[type=search]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  button.go {
+    padding: 0 18px;
+    font: inherit;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  button.go:disabled { opacity: .6; cursor: progress; }
+
+  .samples { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+  .samples span { color: var(--muted); font-size: 13px; margin-right: 2px; align-self: center; }
+  .samples button {
+    font: 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    padding: 7px 10px;
+    color: var(--text);
+    background: var(--chip);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .samples button:hover { border-color: var(--accent); color: var(--accent); }
+
+  .status { margin: 16px 0 10px; min-height: 22px; font-size: 14px; color: var(--muted); }
+  .status .mode {
+    display: inline-block;
+    padding: 2px 8px;
+    margin-right: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 6px;
+  }
+  .answer {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    font-size: 14px;
+    background: var(--accent-soft);
+    border-radius: 8px;
+    white-space: pre-line;
+  }
+  .empty {
+    padding: 22px 14px;
+    text-align: center;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+  }
+  .error { color: var(--hit); border-color: var(--hit); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th {
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--muted);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tbody tr { cursor: default; transition: background .12s; }
+  tbody tr.active { background: var(--hit-soft); }
+  td.sr {
+    width: 52px;
+    font-weight: 700;
+    color: var(--hit);
+  }
+  td.part { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; white-space: nowrap; }
+  .qty {
+    display: inline-block;
+    min-width: 34px;
+    padding: 2px 8px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 999px;
+  }
+  th.q, td.q { text-align: right; width: 64px; }
+
+  .diagram {
+    position: relative;
+    width: 100%;
+    line-height: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .diagram img { width: 100%; height: auto; display: block; }
+  .diagram svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .hl { cursor: pointer; }
+  .hl .ring {
+    fill: rgba(239,68,68,0.14);
+    stroke: #ef4444;
+    stroke-width: 3;
+    vector-effect: non-scaling-stroke;
+    transition: fill .15s, stroke-width .15s;
+  }
+  .hl .pulse {
+    fill: none;
+    stroke: #ef4444;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: pulse 1.6s ease-out infinite;
+    pointer-events: none;
+  }
+  .hl.active .ring { fill: rgba(239,68,68,0.30); stroke-width: 4.5; }
+  .hl.dim { opacity: .35; }
+  @keyframes pulse {
+    0%   { transform: scale(1);    opacity: .85; }
+    100% { transform: scale(1.35); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { .hl .pulse { animation: none; opacity: 0; } }
+  .caption { margin: 10px 2px 0; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Spare Parts Lookup</h1>
+  <p>Pulsar N-125 (00JZF7ZZ) · 28. Front Wheel Assembly - Disc Brake</p>
+</header>
+
+<main>
+  <section class="panel" aria-label="Search">
+    <form id="search-form" autocomplete="off">
+      <input id="q" type="search" placeholder="Part No., diagram number or description" aria-label="Search parts" maxlength="200">
+      <button class="go" id="go" type="submit">Search</button>
+    </form>
+
+    <div class="samples" id="samples">
+      <span>Try:</span>
+    </div>
+
+    <div class="status" id="status" aria-live="polite"></div>
+    <div id="results">
+      <div class="empty">Search by Part No. (e.g. Dh201079), diagram number (part 13) or description (spacer).</div>
+    </div>
+  </section>
+
+  <section class="panel diagram-panel" aria-label="Exploded diagram">
+    <div class="diagram">
+      <img src="/static/front_wheel_assembly.png" alt="Exploded diagram of the front wheel assembly with numbered callouts 1 to 16">
+      <svg id="overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+    </div>
+    <p class="caption" id="caption">Matching parts are circled on the diagram.</p>
+  </section>
+</main>
+
+<script>
+const SAMPLES = ["TYRE 80/100-17", "Dh201079", "DH201079", "part 13", "spacer",
+                 "what holds the front wheel on", "XX999999"];
+
+// Callout positions as percentages of the diagram image (x, y, radius).
+const CALLOUTS = {
+  1:  [{x: 34,   y: 37,   r: 19}],
+  2:  [{x: 49.5, y: 23,   r: 4.5}],
+  3:  [{x: 68,   y: 33,   r: 19}],
+  4:  [{x: 48,   y: 69,   r: 11}],
+  5:  [{x: 37,   y: 80.5, r: 4.5}],
+  6:  [{x: 41.5, y: 79.5, r: 4.5}],
+  7:  [{x: 46,   y: 78.5, r: 4.2}, {x: 56.5, y: 76, r: 4.2}],
+  8:  [{x: 51,   y: 77.5, r: 4.5}],
+  9:  [{x: 61,   y: 75,   r: 4.2}],
+  10: [{x: 65,   y: 74,   r: 4.2}],
+  11: [{x: 75,   y: 71.5, r: 11.5}],
+  12: [{x: 84,   y: 61,   r: 5.5}, {x: 85.5, y: 79, r: 5.5}],
+  13: [{x: 87.5, y: 70,   r: 4.8}],
+  14: [{x: 92.5, y: 68.5, r: 4}],
+  15: [{x: 96,   y: 68,   r: 4}],
+  16: [{x: 15.5, y: 74,   r: 13.5}],
+};
+
+const MODE_LABELS = {
+  exact: "Exact Part No.",
+  ci_fallback: "Part No. (any casing)",
+  none: "Part No.",
+  sr_no: "Diagram number",
+  keyword: "Description",
+  vector: "Meaning (AI)",
+};
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+const $ = (id) => document.getElementById(id);
+const form = $("search-form"), input = $("q"), goBtn = $("go");
+const statusEl = $("status"), resultsEl = $("results"), overlay = $("overlay"), caption = $("caption");
+
+function el(tag, attrs = {}, text) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+function svgEl(tag, attrs) {
+  const n = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  return n;
+}
+
+function setActive(srNo, on) {
+  document.querySelectorAll(`[data-sr="${srNo}"]`).forEach((n) => n.classList.toggle("active", on));
+  const groups = overlay.querySelectorAll(".hl");
+  if (groups.length > 1) {
+    groups.forEach((g) => g.classList.toggle("dim", on && g.dataset.sr !== String(srNo)));
+  }
+}
+
+function drawHighlights(parts) {
+  overlay.replaceChildren();
+  const seen = new Set();
+  for (const p of parts) {
+    if (seen.has(p.sr_no)) continue;
+    seen.add(p.sr_no);
+    for (const c of CALLOUTS[p.sr_no] || []) {
+      const g = svgEl("g", {class: "hl", "data-sr": p.sr_no});
+      const title = svgEl("title", {});
+      title.textContent = `${p.sr_no}. ${p.part_no} – ${p.description}`;
+      g.append(title,
+               svgEl("circle", {class: "pulse", cx: c.x, cy: c.y, r: c.r}),
+               svgEl("circle", {class: "ring",  cx: c.x, cy: c.y, r: c.r}));
+      g.addEventListener("mouseenter", () => setActive(p.sr_no, true));
+      g.addEventListener("mouseleave", () => setActive(p.sr_no, false));
+      overlay.append(g);
+    }
+  }
+  caption.textContent = seen.size
+    ? `Circled: ${[...seen].map((n) => "#" + n).join(", ")}. Hover a row or circle to focus it.`
+    : "Matching parts are circled on the diagram.";
+}
+
+function renderStatus(data) {
+  statusEl.replaceChildren();
+  if (!data.mode) return;
+  statusEl.append(el("span", {class: "mode"}, MODE_LABELS[data.mode] || data.mode));
+  const n = data.parts.length;
+  statusEl.append(document.createTextNode(n ? `${n} part${n > 1 ? "s" : ""} found` : "No match"));
+}
+
+function renderResults(data) {
+  resultsEl.replaceChildren();
+  if (data.answer) resultsEl.append(el("p", {class: "answer"}, data.answer));
+  if (!data.found) {
+    resultsEl.append(el("div", {class: "empty"}, data.message || "No matching parts."));
+    return;
+  }
+  if (data.message) resultsEl.append(el("p", {class: "caption", style: "margin:0 0 10px"}, data.message));
+
+  const table = el("table");
+  const head = el("tr");
+  head.append(el("th", {}, "Sr. No."), el("th", {}, "Part No."), el("th", {}, "Description"),
+              el("th", {class: "q"}, "Qty"));
+  const thead = el("thead");
+  thead.append(head);
+  table.append(thead);
+  const body = el("tbody");
+  for (const p of data.parts) {
+    const tr = el("tr", {"data-sr": p.sr_no});
+    const qty = el("td", {class: "q"});
+    qty.append(el("span", {class: "qty", title: "Quantity"}, `×${p.qty}`));
+    tr.append(el("td", {class: "sr"}, String(p.sr_no)), el("td", {class: "part"}, p.part_no),
+              el("td", {}, p.description), qty);
+    tr.addEventListener("mouseenter", () => setActive(p.sr_no, true));
+    tr.addEventListener("mouseleave", () => setActive(p.sr_no, false));
+    body.append(tr);
+  }
+  table.append(body);
+  resultsEl.append(table);
+}
+
+async function search(query) {
+  query = query.trim();
+  if (!query) { input.focus(); return; }
+  input.value = query;
+  goBtn.disabled = true;
+  statusEl.textContent = "Searching…";
+  try {
+    const res = await fetch("/api/search", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({query}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `Search failed (${res.status})`);
+    renderStatus(data);
+    renderResults(data);
+    drawHighlights(data.parts);
+  } catch (err) {
+    statusEl.textContent = "";
+    resultsEl.replaceChildren(el("div", {class: "empty error"}, err.message || "Search failed."));
+    drawHighlights([]);
+  } finally {
+    goBtn.disabled = false;
+  }
+}
+
+for (const s of SAMPLES) {
+  const b = el("button", {type: "button"}, s);
+  b.addEventListener("click", () => search(s));
+  $("samples").append(b);
+}
+form.addEventListener("submit", (e) => { e.preventDefault(); search(input.value); });
+</script>
+</body>
+</html>

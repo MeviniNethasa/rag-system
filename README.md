@@ -47,6 +47,21 @@ Then load the data (safe to re-run):
 .venv/bin/python ask.py --no-llm spacer  # retrieval only, no Claude call
 ```
 
+## Web UI
+
+```bash
+.venv/bin/uvicorn app:app --reload --port 8000
+```
+
+Open http://localhost:8000. Search on the left; matching parts are circled
+in red on the exploded diagram on the right. Hover a table row or a circle to
+focus it. The API is `POST /api/search` with `{"query": "..."}`; interactive
+API docs are at http://localhost:8000/api/docs.
+
+For questions answered by meaning rather than an exact match (e.g. "what
+holds the front wheel on"), the API asks Claude and returns only the parts
+Claude names, so the diagram circles just those.
+
 ## Tests
 
 ```bash
@@ -61,6 +76,7 @@ Then load the data (safe to re-run):
 data/front_wheel_assembly.txt   source table (exact casing)
 supabase/migrations/            SQL to run in Supabase
 src/parts_rag/                  parser, chunker, embeddings, db, router, retriever, llm
-ingest.py  ask.py               entry points
+ingest.py  ask.py  app.py       entry points (ingest, CLI, web UI)
+static/                         index.html + front_wheel_assembly.png
 scripts/verify.py  tests/       checks
 ```

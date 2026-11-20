@@ -82,3 +82,33 @@ def test_whole_assembly_adds_summary_to_keyword_hits(fake_db):
     state["vector"] = [SUMMARY]
     res = retriever.retrieve("list all spacer parts")
     assert [h.id for h in res.hits] == ["28-summary", "28-row-08"]
+
+
+def test_full_description_query_returns_only_that_row(fake_db):
+    state, _ = fake_db
+    state["keyword"] = [
+        _row(1, "JF131010", "TYRE 80/100-17", matched_terms=1),
+        _row(2, "DK151026", "VALVE TUBELESS TYRE", matched_terms=1),
+    ]
+    res = retriever.retrieve("tyre 80/100-17")
+    assert [h.metadata["part_no"] for h in res.hits] == ["JF131010"]
+
+
+def test_single_word_still_returns_all_matches(fake_db):
+    state, _ = fake_db
+    state["keyword"] = [
+        _row(1, "JF131010", "TYRE 80/100-17", matched_terms=1),
+        _row(2, "DK151026", "VALVE TUBELESS TYRE", matched_terms=1),
+    ]
+    res = retriever.retrieve("tyre")
+    assert {h.metadata["part_no"] for h in res.hits} == {"JF131010", "DK151026"}
+
+
+def test_single_word_equal_to_a_description_keeps_all_matches(fake_db):
+    state, _ = fake_db
+    state["keyword"] = [
+        _row(8, "DE151006", "SPACER ASSEMBLY", matched_terms=1),
+        _row(13, "DS151058", "SPACER", matched_terms=1),
+    ]
+    res = retriever.retrieve("spacer")
+    assert {h.metadata["part_no"] for h in res.hits} == {"DE151006", "DS151058"}

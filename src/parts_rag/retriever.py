@@ -101,6 +101,15 @@ def retrieve(query: str) -> Result:
             # Keyword hits are precise; vector search would only add rows that
             # share the assembly header text, so skip it.
             res.lookup_mode = "keyword"
+            # A multi-word query that is a full description ("TYRE 80/100-17")
+            # means that row, not every row sharing one of its words (VALVE
+            # TUBELESS TYRE). Single words ("spacer") keep every match, so
+            # SPACER ASSEMBLY still shows alongside SPACER.
+            words = query.split()
+            wanted = " ".join(words).lower()
+            exact = [h for h in keyword if h.metadata.get("description", "").lower() == wanted]
+            if exact and len(words) > 1:
+                keyword = exact
             res.hits = sorted(keyword, key=lambda h: (-(h.matched_terms or 0), h.id))
         else:
             res.lookup_mode = "vector"
